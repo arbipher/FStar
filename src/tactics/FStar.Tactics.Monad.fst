@@ -117,7 +117,7 @@ let run_safe t ps =
     else try run t ps
     with | Errors.Err (_, msg, _)
          | Errors.Error (_, msg, _, _) -> Failed (TacticFailure msg, ps)
-         | e -> Failed (e, ps)
+         | e -> raise e
 
 let ret (x:'a) : tac 'a =
     mk_tac (fun ps -> Success (x, ps))
