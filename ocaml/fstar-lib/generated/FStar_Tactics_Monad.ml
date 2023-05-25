@@ -246,7 +246,7 @@ let run_safe :
          | FStar_Errors.Error (uu___3, msg, uu___4, uu___5) ->
              FStar_Tactics_Result.Failed
                ((FStar_Tactics_Common.TacticFailure msg), ps)
-         | e -> FStar_Tactics_Result.Failed (e, ps))
+         | e -> FStar_Compiler_Effect.raise e)
 let ret : 'a . 'a -> 'a tac =
   fun x -> mk_tac (fun ps -> FStar_Tactics_Result.Success (x, ps))
 let bind : 'a 'b . 'a tac -> ('a -> 'b tac) -> 'b tac =
