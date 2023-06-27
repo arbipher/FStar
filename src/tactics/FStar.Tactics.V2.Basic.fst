@@ -2320,9 +2320,21 @@ let refl_check_prop_validity (g:env) (e:term) : tac (option unit & issues) =
            {Env.trivial_guard with guard_f=NonTrivial e})
   else ret (None, [unexpected_uvars_issue (Env.get_range g)])
 
-let refl_check_match_complete (g:env) (sc:term) (scty:typ) (pats : list pattern) : tac (option unit) =
-  // totally fake
-  ret (Some ())
+let refl_check_match_complete (g:env) (sc:term) (scty:typ) (pats : list RD.pattern) : tac (option unit) =
+  idtac ;!
+  (* We just craft a match with the sc and patterns, using `1` in every
+  branch, and check it against type int. *)
+  let one = U.exp_int "1" in
+  let brs = List.map (fun p -> let p = pack_pat p in (p, None, one)) pats in
+  let mm = mk (Tm_match {scrutinee=sc; ret_opt=None; brs=brs; rc_opt=None}) sc.pos in
+  let! env = top_env () in
+  let env = Env.set_expected_typ env S.t_int in
+  let! _, _, g = __tc env mm in
+
+  let errs, b = Errors.catch_errors_and_ignore_rest (fun () -> Env.is_trivial <| Rel.discharge_guard env g) in
+  match errs, b with
+  | [], Some true -> ret (Some ())
+  | _ -> ret None
 
 let refl_instantiate_implicits (g:env) (e:term) : tac (option (term & typ) & issues) =
   if no_uvars_in_g g &&
