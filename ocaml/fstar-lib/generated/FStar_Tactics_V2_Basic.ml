@@ -7573,7 +7573,55 @@ let (refl_check_match_complete :
   fun g ->
     fun sc ->
       fun scty ->
-        fun pats -> FStar_Tactics_Monad.ret (FStar_Pervasives_Native.Some ())
+        fun pats ->
+          FStar_Tactics_Monad.op_let_Bang FStar_Tactics_Monad.idtac
+            (fun uu___ ->
+               let one = FStar_Syntax_Util.exp_int "1" in
+               let brs =
+                 FStar_Compiler_List.map
+                   (fun p ->
+                      let p1 = FStar_Reflection_V2_Builtins.pack_pat p in
+                      (p1, FStar_Pervasives_Native.None, one)) pats in
+               let mm =
+                 FStar_Syntax_Syntax.mk
+                   (FStar_Syntax_Syntax.Tm_match
+                      {
+                        FStar_Syntax_Syntax.scrutinee = sc;
+                        FStar_Syntax_Syntax.ret_opt =
+                          FStar_Pervasives_Native.None;
+                        FStar_Syntax_Syntax.brs = brs;
+                        FStar_Syntax_Syntax.rc_opt1 =
+                          FStar_Pervasives_Native.None
+                      }) sc.FStar_Syntax_Syntax.pos in
+               let uu___1 = top_env () in
+               FStar_Tactics_Monad.op_let_Bang uu___1
+                 (fun env1 ->
+                    let env2 =
+                      FStar_TypeChecker_Env.set_expected_typ env1
+                        FStar_Syntax_Syntax.t_int in
+                    let uu___2 = __tc env2 mm in
+                    FStar_Tactics_Monad.op_let_Bang uu___2
+                      (fun uu___3 ->
+                         match uu___3 with
+                         | (uu___4, uu___5, g1) ->
+                             let uu___6 =
+                               FStar_Errors.catch_errors_and_ignore_rest
+                                 (fun uu___7 ->
+                                    let uu___8 =
+                                      FStar_TypeChecker_Rel.discharge_guard
+                                        env2 g1 in
+                                    FStar_Compiler_Effect.op_Less_Bar
+                                      FStar_TypeChecker_Env.is_trivial uu___8) in
+                             (match uu___6 with
+                              | (errs, b) ->
+                                  (match (errs, b) with
+                                   | ([], FStar_Pervasives_Native.Some
+                                      (true)) ->
+                                       FStar_Tactics_Monad.ret
+                                         (FStar_Pervasives_Native.Some ())
+                                   | uu___7 ->
+                                       FStar_Tactics_Monad.ret
+                                         FStar_Pervasives_Native.None)))))
 let (refl_instantiate_implicits :
   env ->
     FStar_Syntax_Syntax.term ->
