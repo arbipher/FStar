@@ -7563,6 +7563,17 @@ let (refl_check_prop_validity :
              [uu___4] in
            (FStar_Pervasives_Native.None, uu___3) in
          FStar_Tactics_Monad.ret uu___2)
+let (refl_check_match_complete :
+  env ->
+    FStar_Syntax_Syntax.term ->
+      FStar_Syntax_Syntax.term ->
+        FStar_Reflection_V2_Data.pattern Prims.list ->
+          unit FStar_Pervasives_Native.option FStar_Tactics_Monad.tac)
+  =
+  fun g ->
+    fun sc ->
+      fun scty ->
+        fun pats -> FStar_Tactics_Monad.ret (FStar_Pervasives_Native.Some ())
 let (refl_instantiate_implicits :
   env ->
     FStar_Syntax_Syntax.term ->
