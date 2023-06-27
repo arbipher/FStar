@@ -33,6 +33,25 @@ module L = FStar.List.Tot
 module R = FStar.Reflection.V2
 module T = FStar.Tactics.V2
 
+let rec fold_left_dec #a #b
+  (acc : a)
+  (l : list b)
+  (f : a -> (x:b{x << l}) -> a)
+  : Tot a (decreases l)
+  =
+  match l with
+  | [] -> acc
+  | x::xs -> fold_left_dec (f acc x) xs f
+
+let rec map_dec #a #b
+  (l : list a)
+  (f : (x:a{x << l}) -> b)
+  : Tot (list b) (decreases l)
+  =
+  match l with
+  | [] -> []
+  | x::xs -> f x :: map_dec xs f
+
 val inspect_pack (t:R.term_view)
   : Lemma (ensures R.(inspect_ln (pack_ln t) == t))
           [SMTPat R.(inspect_ln (pack_ln t))]
@@ -527,6 +546,9 @@ let eq2 (u:universe) (t v0 v1:term)
     let h2 = pack_ln (Tv_App h1 (v1, Q_Explicit)) in    
     h2
 
+let t_true = `True
+let t_false = `False
+
 let b2t_lid : R.name = ["Prims"; "b2t"]
 let b2t_fv : R.fv = R.pack_fv b2t_lid
 let b2t_ty : R.term = R.pack_ln (R.Tv_Arrow (mk_binder (seal "x") bool_ty Q_Explicit) (mk_total (tm_type u_zero)))
@@ -957,7 +979,6 @@ let mk_if (scrutinee then_ else_:R.term) : R.term =
   pack_ln (Tv_Match scrutinee None [(Pat_Constant C_True, then_);
                                     (Pat_Constant C_False, else_)])
 
-
 // effect and type
 type comp_typ = T.tot_or_ghost & typ
 
@@ -987,6 +1008,31 @@ type relation =
   | R_Eq
   | R_Sub
 
+
+let binding = var & term
+let bindings = list binding
+let rename_bindings bs x y = FStar.List.Tot.map (fun (v, t) -> (v, rename t x y)) bs
+
+let rec extend_env_l (g:env) (bs:bindings)
+  : env
+  = match bs with
+    | [] -> g
+    | (x,t)::bs -> extend_env (extend_env_l g bs) x t
+
+//let rec all_fresh (g:env) (vs : list var)
+//  : Tot prop (decreases vs)
+//  = match vs with
+//    | [] -> True
+//    | v::vs -> None? (lookup_bvar g v)
+//        /\ all_fresh (extend_env g v tun) vs
+
+let rec all_fresh_bindings (g:env) (bs : list binding)
+  : Tot prop (decreases bs)
+  = match bs with
+    | [] -> True
+    | b::bs -> None? (lookup_bvar g (fst b))
+        /\ all_fresh_bindings (extend_env g (fst b) (snd b)) bs
+
 //
 // TODO: support for erasable attribute
 //
@@ -997,6 +1043,79 @@ let is_non_informative_name (l:name) : bool =
 
 let is_non_informative_fv (f:fv) : bool =
   is_non_informative_name (inspect_fv f)
+
+#set-options "--print_implicits"
+
+//let rec elab_pat (p:pattern) : list var * term =
+//  match p with
+//  | Pat_Var bv _ ->
+//    [bv_index bv], pack_ln (Tv_Var bv) // fresh?
+//
+//  | Pat_Cons ctor us pats ->
+//    let hd = pack_ln (Tv_FVar ctor) in
+//    let vs_args = map_dec pats (fun (p, q) -> elab_pat p, q) in
+//    let vs = List.Tot.flatten (map (fun ((vs, t), q) -> vs) vs_args) in
+//    let args = map (fun ((vs, t), q) -> (t, (if q then Q_Implicit else Q_Explicit))) vs_args in
+//    vs, mk_app hd args
+//
+//  | Pat_Constant c ->
+//    [], pack_ln (Tv_Const c)
+//
+//  | Pat_Dot_Term (Some t) ->
+//    [], t
+//
+//  // hmm?
+//  | Pat_Dot_Term None ->
+//    magic()
+
+let rec close_forall_vs (vs : list var) (t : term) : term =
+  match vs with
+  | [] -> t
+  | v::vs ->
+    `(l_Forall #_ (`#(close_term (close_forall_vs vs t) v)))
+
+let rec __close_term_vs (i:nat) (vs : list var) (t : term) : Tot term (decreases vs) =
+  match vs with
+  | [] -> t
+  | v::vs ->
+    subst_term (__close_term_vs (i+1) vs t) [ND v i]
+
+let close_term_vs (vs : list var) (t : term) : term =
+  __close_term_vs 0 vs t
+
+let close_term_bs (bs : list binding) (t : term) : term =
+  close_term_vs (List.Tot.map fst bs) t
+
+let atomic_pat (p:pattern) : Type0 =
+  match p with
+  | Pat_Var _ _
+  | Pat_Constant _
+  | Pat_Dot_Term _ -> True
+  | _ -> False
+
+let rec for_allP f l = match l with
+    | [] -> True
+    | hd::tl -> f hd /\ for_allP f tl
+
+let simple_pat (p:pattern) : Type0 =
+  match p with
+  | Pat_Var _ _
+  | Pat_Constant _ -> True
+  | Pat_Cons fv uso args -> for_allP (fun (p, _) -> atomic_pat p) args
+  | _ -> False
+
+// shadowing
+//let rec extend_env_pat (g:env) (p:pattern) : Tot env (decreases p) =
+//  match p with
+//  | Pat_Var bv sort ->
+//    extend_env g (bv_index bv) sort
+//
+//  | Pat_Cons ctor us pats ->
+//    fold_left_dec g pats (fun g (p, _) -> extend_env_pat g p)
+//
+//  | Pat_Constant _
+//  | Pat_Dot_Term _ ->
+//    g
 
 [@@ no_auto_projectors]
 noeq
@@ -1139,6 +1258,20 @@ type typing : env -> term -> comp_typ -> Type0 =
      typing (extend_env g x t) (open_term e x) (e_eff, tm_type u2) ->
      typing g (pack_ln (Tv_Refine (mk_simple_binder pp_name_default t) e)) (T.E_Total, tm_type u1)
 
+//  | T_RefineIntro:
+//     g:env ->
+//     x:var { None? (lookup_bvar g x) } ->
+//     exp:term ->
+//     ty:term -> // type does not depend on var
+//     pred:term -> // predicate may depend
+//     typing g exp ty ->
+//     prop_validity_token
+//     typing g ty (tm_type u1) ->
+//     typing (extend_env g x t) (open_term e x) (tm_type u2) ->
+//     typing g
+//     exp
+//     (pack_ln (Tv_Refine (pack_bv (make_bv 0 t)) e))
+
   | T_PropIrrelevance:
      g:env -> 
      e:term -> 
@@ -1174,15 +1307,17 @@ type typing : env -> term -> comp_typ -> Type0 =
      typing g ty (ty_eff, tm_type u_ty) -> //typedness of ty cannot rely on hyp
      typing g (mk_if scrutinee then_ else_) (eff, ty)
 
-  // | T_Match: 
-  //    g:env ->
-  //    scrutinee:term ->
-  //    i_ty:term ->
-  //    branches:list branch ->
-  //    ty:term ->
-  //    typing g scrutinee i_ty ->
-  //    branches_typing g scrutinee i_ty branches ty ->
-  //    typing g (pack_ln (Tv_Match scrutinee None branches)) ty
+  | T_Match:
+     g:env ->
+     scrutinee:term ->
+     eff:T.tot_or_ghost ->
+     i_ty:term ->
+     branches:list branch ->
+     ty:comp_typ ->
+     typing g scrutinee (eff, i_ty) ->
+     branches_typing g scrutinee i_ty ty branches -> // each branch has proper type
+     complet : match_is_complete g scrutinee i_ty (List.Tot.map fst branches)  -> // complete patterns
+     typing g (pack_ln (Tv_Match scrutinee None branches)) ty
 
 and related : env -> term -> relation -> term -> Type0 =
   | Rel_equiv:
@@ -1310,7 +1445,83 @@ and related_comp : env -> comp_typ -> relation -> comp_typ -> Type0 =
     non_informative t ->
     related_comp g (T.E_Ghost, t) R_Sub (T.E_Total, t)
 
-// and branches_typing : env -> term -> term -> list branch -> term -> Type0 =
+and branches_typing (g:env) (sc:term) (sc_ty:term) (rty:comp_typ) : (brs:list branch) -> Type0 =
+  | BT_Nil :
+    branches_typing g sc sc_ty rty []
+
+  | BT_S :
+
+    br : branch ->
+    pf : branch_ok g sc sc_ty rty br ->
+
+    rest_br : list branch ->
+    rest : branches_typing g sc sc_ty rty rest_br ->
+    branches_typing g sc sc_ty rty (br :: rest_br)
+
+and branch_ok : (g:env) -> (sc:term) -> (sc_ty:term) -> (rty:comp_typ) -> (br : branch) -> Type0 =
+  | BO_Cons :
+    g:env ->
+    sc:term ->
+    sc_ty:typ ->
+    rty:comp_typ ->
+
+    head:fv ->
+    vars : bindings{all_fresh_bindings g vars}->
+
+    hyp_var:var {None? (lookup_bvar g hyp_var)} ->
+
+    body:term ->
+
+    typing (extend_env (extend_env_l g vars)
+             hyp_var (eq2 u_zero sc_ty sc (mk_e_app (pack_ln (Tv_FVar head)) (List.Tot.map (fun b -> pack_ln (Tv_Var (var_as_namedv (fst b)))) vars))))
+           body rty ->
+
+    branch_ok g sc sc_ty rty ((Pat_Cons head None [],
+                              close_term_bs vars body))
+
+  | BO_Var :
+    g:env ->
+    sc:term ->
+    sc_ty:typ ->
+    rty:comp_typ ->
+
+    v : var{None? (lookup_bvar g v)} ->
+    hyp_var:var {None? (lookup_bvar (extend_env g v sc_ty) hyp_var)} ->
+
+    body:term ->
+
+    typing (extend_env (extend_env g v sc_ty)
+             hyp_var (eq2 u_zero sc_ty sc (pack_ln (Tv_Var (var_as_namedv v)))))
+           body rty ->
+
+    branch_ok g sc sc_ty rty ((Pat_Var (seal sc_ty) pp_name_default,
+                               close_term body v))
+
+  | BO_Const :
+    g:env ->
+    sc:term ->
+    sc_ty:typ ->
+    rty:comp_typ ->
+
+    c:vconst ->
+
+    hyp_var:var {None? (lookup_bvar g hyp_var)} ->
+
+    body:term ->
+
+    typing (extend_env g
+             hyp_var (eq2 u_zero sc_ty sc (pack_ln (Tv_Const c))))
+           body rty ->
+
+    branch_ok g sc sc_ty rty ((Pat_Constant c, body))
+
+and match_is_complete : env -> term -> typ -> list pattern -> Type0 =
+  | MC_Tok :
+    env:_ ->
+    sc:_ ->
+    ty:_ ->
+    pats:_ ->
+    T.match_complete_token env sc ty pats -> match_is_complete env sc ty pats
 
 and sub_typing (g:env) (t1 t2:term) = related g t1 R_Sub t2
 
@@ -1319,15 +1530,6 @@ and sub_comp (g:env) (c1 c2:comp_typ) = related_comp g c1 R_Sub c2
 type tot_typing (g:env) (e:term) (t:term) = typing g e (T.E_Total, t)
 
 type ghost_typing (g:env) (e:term) (t:term) = typing g e (T.E_Ghost, t)
-
-let bindings = list (var & term)
-let rename_bindings bs x y = FStar.List.Tot.map (fun (v, t) -> (v, rename t x y)) bs
-
-let rec extend_env_l (g:env) (bs:bindings) 
-  : env
-  = match bs with
-    | [] -> g
-    | (x,t)::bs -> extend_env (extend_env_l g bs) x t
 
 val subtyping_token_renaming (g:env)
                              (bs0:bindings)
@@ -1601,3 +1803,40 @@ type fstar_top_env = g:fstar_env {
 //
 
 type dsl_tac_t = g:fstar_top_env -> T.Tac (r:(R.term & R.typ){typing g (fst r) (T.E_Total, snd r)})
+
+val if_complete_match (g:env) (t:term)
+  : T.match_complete_token g t bool_ty [
+       Pat_Constant C_True;
+       Pat_Constant C_False;
+    ]
+
+// Derived rule for if
+let mkif
+    (g:env)
+    (scrutinee:term)
+    (then_:term)
+    (else_:term)
+    (ty:term)
+    (u_ty:universe)
+    (hyp:var { None? (lookup_bvar g hyp) /\ ~(hyp `Set.mem` (freevars then_ `Set.union` freevars else_)) })
+    (eff:T.tot_or_ghost)
+    (ty_eff:T.tot_or_ghost)
+    (ts : typing g scrutinee (eff, bool_ty))
+    (tt : typing (extend_env g hyp (eq2 (pack_universe Uv_Zero) bool_ty scrutinee true_bool)) then_ (eff, ty))
+    (te : typing (extend_env g hyp (eq2 (pack_universe Uv_Zero) bool_ty scrutinee false_bool)) else_ (eff, ty))
+    (tr : typing g ty (ty_eff, tm_type u_ty))
+: typing g (mk_if scrutinee then_ else_) (eff, ty)
+=
+assert (bool_ty == `bool);
+let brt = (Pat_Constant C_True, then_) in
+let bre = (Pat_Constant C_False, else_) in
+let brty () : branches_typing g scrutinee bool_ty (eff,ty) [brt; bre] =
+  BT_S (Pat_Constant C_True, then_)
+       (BO_Const g scrutinee bool_ty (eff,ty) C_True hyp then_ tt)
+       _ (
+    BT_S (Pat_Constant C_False, else_)
+         (BO_Const g scrutinee bool_ty (eff,ty) C_False hyp else_ te)
+         _
+      BT_Nil)
+in
+T_Match g scrutinee eff bool_ty [brt; bre] (eff, ty) ts (brty ()) (MC_Tok g scrutinee bool_ty _ (if_complete_match g scrutinee))

@@ -482,6 +482,13 @@ type prop_validity_token (g:env) (t:term) =
 val check_prop_validity (g:env) (t:term)
   : Tac (option (prop_validity_token g t) & issues)
 
+// Can't immediately move to FStar.Tactics.Types since pattern is not in scope there
+val match_complete_token (g:env) (sc:term) (t:typ) (pats:list pattern)
+  : Type0
+
+val check_match_complete (g:env) (sc:term) (t:typ) (pats:list pattern)
+  : Tac (option (match_complete_token g sc t pats))
+
 //
 // Instantiate implicits in t
 //

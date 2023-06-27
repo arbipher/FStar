@@ -925,3 +925,5 @@ and open_with_gt_ln_pats (l:list (pattern & bool)) (i:nat) (t:term) (j:nat)
     open_with_gt_ln_pat (fst hd) i t j;
     let k = binder_offset_pattern (fst hd) in
     open_with_gt_ln_pats tl (i + k) t (j + k)
+
+let if_complete_match (g:env) (t:term) = magic()

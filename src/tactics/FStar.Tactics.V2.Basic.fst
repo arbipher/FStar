@@ -2320,6 +2320,10 @@ let refl_check_prop_validity (g:env) (e:term) : tac (option unit & issues) =
            {Env.trivial_guard with guard_f=NonTrivial e})
   else ret (None, [unexpected_uvars_issue (Env.get_range g)])
 
+let refl_check_match_complete (g:env) (sc:term) (scty:typ) (pats : list pattern) : tac (option unit) =
+  // totally fake
+  ret (Some ())
+
 let refl_instantiate_implicits (g:env) (e:term) : tac (option (term & typ) & issues) =
   if no_uvars_in_g g &&
      no_uvars_in_term e
