@@ -1312,9 +1312,9 @@ type typing : env -> term -> comp_typ -> Type0 =
      scrutinee:term ->
      eff:T.tot_or_ghost ->
      i_ty:term ->
+     typing g scrutinee (eff, i_ty) ->
      branches:list branch ->
      ty:comp_typ ->
-     typing g scrutinee (eff, i_ty) ->
      branches_typing g scrutinee i_ty ty branches -> // each branch has proper type
      complet : match_is_complete g scrutinee i_ty (List.Tot.map fst branches)  -> // complete patterns
      typing g (pack_ln (Tv_Match scrutinee None branches)) ty
@@ -1839,4 +1839,4 @@ let brty () : branches_typing g scrutinee bool_ty (eff,ty) [brt; bre] =
          _
       BT_Nil)
 in
-T_Match g scrutinee eff bool_ty [brt; bre] (eff, ty) ts (brty ()) (MC_Tok g scrutinee bool_ty _ (if_complete_match g scrutinee))
+T_Match g scrutinee eff bool_ty ts [brt; bre] (eff, ty) (brty ()) (MC_Tok g scrutinee bool_ty _ (if_complete_match g scrutinee))
