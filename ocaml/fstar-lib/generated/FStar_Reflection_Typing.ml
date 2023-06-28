@@ -1271,10 +1271,10 @@ type ('dummyV0, 'dummyV1, 'dummyV2) typing =
   unit, unit) typing * (unit, unit, unit) typing * (unit, unit, unit) typing
   
   | T_Match of FStar_Reflection_Types.env * FStar_Reflection_Types.term *
-  FStar_Tactics_Types.tot_or_ghost * FStar_Reflection_Types.term *
-  FStar_Reflection_V2_Data.branch Prims.list * comp_typ * (unit, unit, 
-  unit) typing * (unit, unit, unit, unit, unit) branches_typing * (unit,
-  unit, unit, unit) match_is_complete 
+  FStar_Tactics_Types.tot_or_ghost * FStar_Reflection_Types.term * (unit,
+  unit, unit) typing * FStar_Reflection_V2_Data.branch Prims.list * comp_typ
+  * (unit, unit, unit, unit, unit) branches_typing * (unit, unit, unit, 
+  unit) match_is_complete 
 and ('dummyV0, 'dummyV1, 'dummyV2, 'dummyV3) related =
   | Rel_equiv of FStar_Reflection_Types.env * FStar_Reflection_Types.term *
   FStar_Reflection_Types.term * relation * (unit, unit, unit) equiv 
@@ -1571,8 +1571,8 @@ let (mkif :
                                             FStar_Reflection_V2_Data.C_False,
                                             hyp, else_, te)), [], BT_Nil))) in
                             T_Match
-                              (g, scrutinee, eff, bool_ty, [brt; bre],
-                                (eff, ty), ts, (brty ()),
+                              (g, scrutinee, eff, bool_ty, ts, [brt; bre],
+                                (eff, ty), (brty ()),
                                 (MC_Tok
                                    (g, scrutinee, bool_ty,
                                      [FStar_Reflection_V2_Data.Pat_Constant
